@@ -21,22 +21,6 @@ if uploaded_file:
     chart_type = st.sidebar.selectbox("选择图表类型", ["折线图"])
     group_by = st.sidebar.selectbox("选择分组字段", ["无分组"] + group_fields)
 
-    # 用于筛选的字段（排除分组字段）
-    filter_fields = [col for col in group_fields if col != group_by] if group_by != "无分组" else group_fields
-
-    filters = {}
-    for field in filter_fields:
-        options = sorted(df[field].dropna().unique().tolist())
-        selected = st.sidebar.multiselect(f"{field}（多选）", options, default=options)
-        filters[field] = selected
-
-    # 分组字段的值选择
-    if group_by != "无分组":
-        group_options = sorted(df[group_by].dropna().unique().tolist())
-        selected_groups = st.sidebar.multiselect(f"选择要展示的 {group_by}", group_options, default=group_options)
-    else:
-        selected_groups = None
-
     # 年份选择
     years = sorted(df["year"].dropna().unique().tolist())
     year_range = st.sidebar.slider("选择年份范围", min_value=min(years), max_value=max(years), value=(min(years), max(years)))
@@ -44,11 +28,33 @@ if uploaded_file:
     # 是否显示置信区间
     show_ci = st.sidebar.checkbox("显示置信区间（upper/lower）", value=False)
 
+    # 分组字段的值选择
+    if group_by != "无分组":
+        group_options = sorted(df[group_by].dropna().unique().tolist())
+        selected_groups = st.sidebar.multiselect(f"选择要展示的 {group_by}", group_options)
+    else:
+        selected_groups = []
+
+    # 用于筛选的字段（排除分组字段）
+    filter_fields = [col for col in group_fields if col != group_by] if group_by != "无分组" else group_fields
+    filters = {}
+    for field in filter_fields:
+        options = sorted(df[field].dropna().unique().tolist())
+        selected = st.sidebar.multiselect(f"{field}（请选择）", options)
+        filters[field] = selected
+
     # 应用筛选条件
     filtered_df = df.copy()
+
+    # 筛选字段
     for field, values in filters.items():
-        filtered_df = filtered_df[filtered_df[field].isin(values)]
+        if values:
+            filtered_df = filtered_df[filtered_df[field].isin(values)]
+
+    # 筛选年份
     filtered_df = filtered_df[(filtered_df["year"] >= year_range[0]) & (filtered_df["year"] <= year_range[1])]
+
+    # 筛选分组字段
     if group_by != "无分组" and selected_groups:
         filtered_df = filtered_df[filtered_df[group_by].isin(selected_groups)]
 
