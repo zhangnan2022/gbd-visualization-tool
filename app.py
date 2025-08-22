@@ -4,7 +4,7 @@ import pandas as pd
 import altair as alt
 
 st.set_page_config(page_title="GBD 可视化助手", layout="wide")
-st.title("🌍 GBD 可视化助手（增强版）")
+st.title("🌍 GBD 可视化助手（内侧）——zhangnan")
 st.markdown("上传从 IHME 下载的 GBD 数据 CSV 文件，进行交互式可视化。")
 
 uploaded_file = st.file_uploader("📤 上传你的 GBD CSV 文件", type="csv")
