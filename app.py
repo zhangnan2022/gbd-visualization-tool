@@ -4,62 +4,66 @@ import pandas as pd
 import altair as alt
 
 st.set_page_config(page_title="GBD 可视化助手", layout="wide")
-st.title("🌍 GBD 可视化助手")
+st.title("🌍 GBD 可视化助手（增强版）")
 st.markdown("上传从 IHME 下载的 GBD 数据 CSV 文件，进行交互式可视化。")
 
-uploaded_file = st.file_uploader("📤 上传你的 CSV 文件", type="csv")
+uploaded_file = st.file_uploader("📤 上传你的 GBD CSV 文件", type="csv")
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
+    st.success("✅ 数据成功加载！")
 
-    # 显示基础信息
-    st.success("✅ 数据成功加载！请从下方选择要可视化的内容。")
+    # 可选择的分组字段
+    group_fields = ["sex", "age", "measure", "location", "cause", "metric"]
+    st.sidebar.header("图表设置")
+    chart_type = st.sidebar.selectbox("选择图表类型", ["折线图"])
+    group_by = st.sidebar.selectbox("选择分组字段", ["无分组"] + group_fields)
 
-    # 动态字段选择
-    measure = st.selectbox("选择 Measure", sorted(df["measure"].unique()))
-    location = st.selectbox("选择 Location", sorted(df["location"].unique()))
-    cause = st.selectbox("选择 Cause", sorted(df["cause"].unique()))
-    age = st.selectbox("选择 Age", sorted(df["age"].unique()))
-    metric = st.selectbox("选择 Metric", sorted(df["metric"].unique()))
-    show_ci = st.checkbox("显示上下限 (Confidence Interval)", value=False)
+    # 用于筛选的字段（排除分组字段）
+    filter_fields = [col for col in group_fields if col != group_by] if group_by != "无分组" else group_fields
 
-    # 多选 sex 和 year
-    sex_options = st.multiselect("选择性别 (Sex)", df["sex"].unique(), default=list(df["sex"].unique()))
-    year_range = sorted(df["year"].unique())
-    year_selected = st.slider("选择年份范围", min_value=min(year_range), max_value=max(year_range),
-                              value=(min(year_range), max(year_range)))
+    filters = {}
+    for field in filter_fields:
+        options = sorted(df[field].dropna().unique().tolist())
+        selected = st.sidebar.multiselect(f"{field}（多选）", options, default=options)
+        filters[field] = selected
 
-    # 过滤数据
-    filtered = df[
-        (df["measure"] == measure) &
-        (df["location"] == location) &
-        (df["cause"] == cause) &
-        (df["age"] == age) &
-        (df["metric"] == metric) &
-        (df["sex"].isin(sex_options)) &
-        (df["year"] >= year_selected[0]) & (df["year"] <= year_selected[1])
-    ]
+    # 年份选择
+    years = sorted(df["year"].dropna().unique().tolist())
+    year_range = st.sidebar.slider("选择年份范围", min_value=min(years), max_value=max(years), value=(min(years), max(years)))
 
-    # 图表
-    if filtered.empty:
-        st.warning("没有找到匹配的数据，请尝试更换筛选条件。")
+    # 是否显示置信区间
+    show_ci = st.sidebar.checkbox("显示置信区间（upper/lower）", value=False)
+
+    # 应用筛选条件
+    filtered_df = df.copy()
+    for field, values in filters.items():
+        filtered_df = filtered_df[filtered_df[field].isin(values)]
+    filtered_df = filtered_df[(filtered_df["year"] >= year_range[0]) & (filtered_df["year"] <= year_range[1])]
+
+    if filtered_df.empty:
+        st.warning("❗ 没有找到匹配的数据，请调整筛选条件。")
     else:
-        line = alt.Chart(filtered).mark_line(point=True).encode(
+        # 折线图
+        base = alt.Chart(filtered_df).mark_line(point=True).encode(
             x="year:O",
             y="val:Q",
-            color="sex:N",
-            tooltip=["year", "sex", "val"]
-        ).properties(title="GBD 折线图", width=800, height=400)
+            tooltip=["year", "val"] + ([group_by] if group_by != "无分组" else [])
+        ).properties(width=800, height=400)
 
-        chart = line
+        if group_by != "无分组":
+            base = base.encode(color=f"{group_by}:N")
+
+        chart = base
 
         if show_ci:
-            band = alt.Chart(filtered).mark_area(opacity=0.2).encode(
+            band = alt.Chart(filtered_df).mark_area(opacity=0.2).encode(
                 x="year:O",
                 y="lower:Q",
                 y2="upper:Q",
-                color="sex:N"
+                color=f"{group_by}:N" if group_by != "无分组" else alt.value("lightgray")
             )
-            chart = band + line
+            chart = band + base
 
+        st.subheader("📊 可视化结果")
         st.altair_chart(chart, use_container_width=True)
