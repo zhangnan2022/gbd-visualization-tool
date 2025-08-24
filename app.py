@@ -16,7 +16,6 @@ st.set_page_config(page_title="GBD 可视化助手", layout="wide")
 st.title("GBD 可视化助手 · 内测版")
 st.markdown("作者：zhangnan")
 
-
 tabs = st.tabs(["分组趋势图", "Table 1 生成器"])
 
 with tabs[0]:
@@ -94,9 +93,9 @@ with tabs[1]:
         available_measures = df['measure'].dropna().unique().tolist()
 
         selected_cause = st.selectbox("请选择病因 (cause)", available_causes)
-        selected_measure = st.selectbox("请选择指标类型 (measure)", available_measures)
         selected_age = st.selectbox("请选择年龄组 (age)", available_ages)
         selected_sex = st.selectbox("请选择性别 (sex)", available_sexes)
+        selected_measure = st.selectbox("请选择指标 (measure)", available_measures)
 
         year_range = [1990, 2021]
 
@@ -105,28 +104,41 @@ with tabs[1]:
 
         def get_row(location):
             row = {"Feature": location}
-            age_used = "All ages" if selected_age == "Age-standardized" and selected_measure == "Prevalence" else selected_age
 
             for year in year_range:
                 d_number = df[(df['location'] == location) & (df['year'] == year) & (df['cause'] == selected_cause) &
-                              (df['measure'] == selected_measure) & (df['age'] == age_used) & (df['sex'] == selected_sex) & (df['metric'] == 'Number')]
+                              (df['metric'] == 'Number') & (df['measure'] == selected_measure) &
+                              (df['age'] == ('All ages' if selected_age == 'Age-standardized' else selected_age)) &
+                              (df['sex'] == selected_sex)]
 
                 d_rate = df[(df['location'] == location) & (df['year'] == year) & (df['cause'] == selected_cause) &
-                            (df['measure'] == selected_measure) & (df['age'] == selected_age) & (df['sex'] == selected_sex) & (df['metric'] == 'Rate')]
+                            (df['metric'] == 'Rate') & (df['measure'] == selected_measure) &
+                            (df['age'] == selected_age) & (df['sex'] == selected_sex)]
 
                 row[f"Cases_{year}"] = format_val(d_number['val'].sum(), d_number['lower'].sum(), d_number['upper'].sum(), 0) if not d_number.empty else "NA"
                 row[f"Rates_{year}"] = format_val(d_rate['val'].sum(), d_rate['lower'].sum(), d_rate['upper'].sum()) if not d_rate.empty else "NA"
 
-            if not d_number.empty and d_number[d_number['year'] == 1990].shape[0] > 0 and d_number[d_number['year'] == 2021].shape[0] > 0:
-                v1 = d_number[d_number['year'] == 1990]['val'].sum()
-                v2 = d_number[d_number['year'] == 2021]['val'].sum()
+            # Cases change
+            d_1990 = df[(df['location'] == location) & (df['year'] == 1990) & (df['cause'] == selected_cause) &
+                        (df['metric'] == 'Number') & (df['measure'] == selected_measure) &
+                        (df['age'] == ('All ages' if selected_age == 'Age-standardized' else selected_age)) &
+                        (df['sex'] == selected_sex)]
+            d_2021 = df[(df['location'] == location) & (df['year'] == 2021) & (df['cause'] == selected_cause) &
+                        (df['metric'] == 'Number') & (df['measure'] == selected_measure) &
+                        (df['age'] == ('All ages' if selected_age == 'Age-standardized' else selected_age)) &
+                        (df['sex'] == selected_sex)]
+            if not d_1990.empty and not d_2021.empty:
+                v1 = d_1990['val'].sum()
+                v2 = d_2021['val'].sum()
                 change = ((v2 - v1) / v1) * 100 if v1 != 0 else np.nan
                 row['Cases_change'] = f"{round(change, 2)}%"
             else:
                 row['Cases_change'] = "NA"
 
+            # EAPC
             d_rate_all = df[(df['location'] == location) & (df['cause'] == selected_cause) &
-                            (df['measure'] == selected_measure) & (df['age'] == selected_age) & (df['sex'] == selected_sex) & (df['metric'] == 'Rate')]
+                            (df['metric'] == 'Rate') & (df['measure'] == selected_measure) &
+                            (df['age'] == selected_age) & (df['sex'] == selected_sex)]
 
             eapc_ci = "NA"
             if d_rate_all.shape[0] >= 2:
@@ -146,18 +158,15 @@ with tabs[1]:
 
         if st.button("生成 Table 1"):
             summary_df = []
-            order_list = ['Global', 'High SDI', 'High-middle SDI', 'Middle SDI', 'Low-middle SDI', 'Low SDI']
             all_locations = sorted(df['location'].dropna().unique().tolist())
-            extra_regions = [loc for loc in all_locations if loc not in order_list]
-            full_order = order_list + sorted(extra_regions)
 
-            for loc in full_order:
-                if loc in all_locations:
-                    summary_df.append(get_row(loc))
+            for loc in all_locations:
+                summary_df.append(get_row(loc))
 
             summary_table = pd.DataFrame(summary_df)
             st.dataframe(summary_table)
 
+            # 导出 Word
             doc = Document()
             doc.add_heading("Table 1", level=1)
 
