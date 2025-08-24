@@ -106,11 +106,3 @@ if uploaded_file:
             csv_data = filtered_df.to_csv(index=False).encode("utf-8")
             st.download_button("📥 下载筛选后的数据", csv_data, file_name="filtered_gbd_data.csv", mime="text/csv")
 
-            st.markdown("📸 导出图像（TIF 格式）")
-            img_buf = io.BytesIO()
-            chart.save(img_buf, format="png")
-            img_buf.seek(0)
-            image = Image.open(img_buf).convert("RGB")
-            tif_buf = io.BytesIO()
-            image.save(tif_buf, format="TIFF")
-            st.download_button("📤 下载图表（.tif）", tif_buf.getvalue(), file_name="gbd_chart.tif", mime="image/tiff")
