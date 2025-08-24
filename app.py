@@ -17,9 +17,9 @@ st.title("GBD 可视化助手 · 内测版")
 st.markdown("作者：zhangnan")
 
 
-TABS = st.tabs(["分组趋势图", "Table 1 生成器"])
+tabs = st.tabs(["分组趋势图", "Table 1 生成器"])
 
-with TABS[0]:
+with tabs[0]:
     st.header("分组趋势图")
     uploaded_file = st.file_uploader("上传 GBD CSV 数据文件", type=["csv"], key="chart")
 
@@ -32,7 +32,6 @@ with TABS[0]:
         sex_options = df['sex'].dropna().unique().tolist()
         age_options = df['age'].dropna().unique().tolist()
         cause_options = df['cause'].dropna().unique().tolist()
-        metric_options = df['metric'].dropna().unique().tolist()
         year_options = sorted(df['year'].dropna().unique().tolist())
 
         st.subheader("筛选条件")
@@ -45,16 +44,14 @@ with TABS[0]:
         selected_sex = st.multiselect("请选择 sex", sex_options) if group_by != "sex" else []
         selected_age = st.multiselect("请选择 age", age_options) if group_by != "age" else []
         selected_cause = st.selectbox("请选择 cause", ["请选择"] + cause_options)
-        selected_metric = st.selectbox("请选择 metric", ["请选择"] + metric_options)
         selected_years = st.slider("选择年份范围", min_value=min(year_options), max_value=max(year_options), value=(min(year_options), max(year_options)))
 
         show_ci = st.checkbox("显示置信区间 (upper/lower)")
 
-        if selected_measure != "请选择" and selected_location != "请选择" and selected_cause != "请选择" and selected_metric != "请选择":
+        if selected_measure != "请选择" and selected_location != "请选择" and selected_cause != "请选择":
             chart_df = df[(df['measure'] == selected_measure) &
                           (df['location'] == selected_location) &
                           (df['cause'] == selected_cause) &
-                          (df['metric'] == selected_metric) &
                           (df['year'] >= selected_years[0]) & (df['year'] <= selected_years[1])]
 
             if group_by != "sex" and selected_sex:
@@ -82,7 +79,7 @@ with TABS[0]:
                 st.altair_chart(chart, use_container_width=True)
 
 
-with TABS[1]:
+with tabs[1]:
     st.header("Table 1 生成器")
     table_file = st.file_uploader("上传 GBD CSV 文件用于生成 Table 1", type=["csv"], key="table")
 
@@ -95,13 +92,11 @@ with TABS[1]:
         available_locations = df['location'].dropna().unique().tolist()
         available_sexes = df['sex'].dropna().unique().tolist()
         available_measures = df['measure'].dropna().unique().tolist()
-        available_metrics = df['metric'].dropna().unique().tolist()
 
         selected_cause = st.selectbox("请选择病因 (cause)", available_causes)
+        selected_measure = st.selectbox("请选择指标类型 (measure)", available_measures)
         selected_age = st.selectbox("请选择年龄组 (age)", available_ages)
         selected_sex = st.selectbox("请选择性别 (sex)", available_sexes)
-        selected_measure = st.selectbox("请选择指标 (measure)", available_measures)
-        selected_metric = st.selectbox("请选择计量类型 (metric)", available_metrics)
 
         year_range = [1990, 2021]
 
@@ -110,47 +105,35 @@ with TABS[1]:
 
         def get_row(location):
             row = {"Feature": location}
-
-            use_age = selected_age
-            if selected_age == "Age-standardized" and selected_metric == "Number":
-                use_age = "All ages"
+            age_used = "All ages" if selected_age == "Age-standardized" and selected_measure == "Prevalence" else selected_age
 
             for year in year_range:
                 d_number = df[(df['location'] == location) & (df['year'] == year) & (df['cause'] == selected_cause) &
-                              (df['metric'] == 'Number') & (df['measure'] == selected_measure) &
-                              (df['age'] == use_age) & (df['sex'] == selected_sex)]
+                              (df['measure'] == selected_measure) & (df['age'] == age_used) & (df['sex'] == selected_sex) & (df['metric'] == 'Number')]
 
                 d_rate = df[(df['location'] == location) & (df['year'] == year) & (df['cause'] == selected_cause) &
-                            (df['metric'] == 'Rate') & (df['measure'] == selected_measure) &
-                            (df['age'] == selected_age) & (df['sex'] == selected_sex)]
+                            (df['measure'] == selected_measure) & (df['age'] == selected_age) & (df['sex'] == selected_sex) & (df['metric'] == 'Rate')]
 
                 row[f"Cases_{year}"] = format_val(d_number['val'].sum(), d_number['lower'].sum(), d_number['upper'].sum(), 0) if not d_number.empty else "NA"
                 row[f"Rates_{year}"] = format_val(d_rate['val'].sum(), d_rate['lower'].sum(), d_rate['upper'].sum()) if not d_rate.empty else "NA"
 
-            d_1990 = df[(df['location'] == location) & (df['year'] == 1990) & (df['cause'] == selected_cause) &
-                        (df['metric'] == 'Number') & (df['measure'] == selected_measure) &
-                        (df['age'] == use_age) & (df['sex'] == selected_sex)]
-            d_2021 = df[(df['location'] == location) & (df['year'] == 2021) & (df['cause'] == selected_cause) &
-                        (df['metric'] == 'Number') & (df['measure'] == selected_measure) &
-                        (df['age'] == use_age) & (df['sex'] == selected_sex)]
-
-            if not d_1990.empty and not d_2021.empty:
-                v1 = d_1990['val'].sum()
-                v2 = d_2021['val'].sum()
+            if not d_number.empty and d_number[d_number['year'] == 1990].shape[0] > 0 and d_number[d_number['year'] == 2021].shape[0] > 0:
+                v1 = d_number[d_number['year'] == 1990]['val'].sum()
+                v2 = d_number[d_number['year'] == 2021]['val'].sum()
                 change = ((v2 - v1) / v1) * 100 if v1 != 0 else np.nan
                 row['Cases_change'] = f"{round(change, 2)}%"
             else:
                 row['Cases_change'] = "NA"
 
             d_rate_all = df[(df['location'] == location) & (df['cause'] == selected_cause) &
-                            (df['metric'] == 'Rate') & (df['measure'] == selected_measure) &
-                            (df['age'] == selected_age) & (df['sex'] == selected_sex)]
+                            (df['measure'] == selected_measure) & (df['age'] == selected_age) & (df['sex'] == selected_sex) & (df['metric'] == 'Rate')]
+
             eapc_ci = "NA"
             if d_rate_all.shape[0] >= 2:
                 try:
                     d_rate_all = d_rate_all[d_rate_all['val'] > 0]
                     d_rate_all['y'] = np.log(d_rate_all['val'])
-                    slope, _, _, _, std_err = stats.linregress(d_rate_all['year'], d_rate_all['y'])
+                    slope, intercept, r_value, p_value, std_err = stats.linregress(d_rate_all['year'], d_rate_all['y'])
                     eapc = (np.exp(slope) - 1) * 100
                     lci = (np.exp(slope - 1.96 * std_err) - 1) * 100
                     uci = (np.exp(slope + 1.96 * std_err) - 1) * 100
@@ -163,13 +146,13 @@ with TABS[1]:
 
         if st.button("生成 Table 1"):
             summary_df = []
-            locations = df['location'].dropna().unique().tolist()
-            sdi_groups = ['High SDI', 'High-middle SDI', 'Middle SDI', 'Low-middle SDI', 'Low SDI']
-            region_groups = [x for x in locations if x not in ['Global'] + sdi_groups]
-            ordered = ['Global'] + sdi_groups + sorted(region_groups)
+            order_list = ['Global', 'High SDI', 'High-middle SDI', 'Middle SDI', 'Low-middle SDI', 'Low SDI']
+            all_locations = sorted(df['location'].dropna().unique().tolist())
+            extra_regions = [loc for loc in all_locations if loc not in order_list]
+            full_order = order_list + sorted(extra_regions)
 
-            for loc in ordered:
-                if loc in locations:
+            for loc in full_order:
+                if loc in all_locations:
                     summary_df.append(get_row(loc))
 
             summary_table = pd.DataFrame(summary_df)
@@ -183,7 +166,7 @@ with TABS[1]:
             for i, col in enumerate(summary_table.columns):
                 hdr_cells[i].text = str(col)
 
-            for _, row in summary_table.iterrows():
+            for index, row in summary_table.iterrows():
                 row_cells = table.add_row().cells
                 for i, item in enumerate(row):
                     row_cells[i].text = str(item)
