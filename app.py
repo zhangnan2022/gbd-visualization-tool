@@ -13,19 +13,19 @@ from scipy import stats
 
 st.set_page_config(page_title="GBD 可视化助手", layout="wide")
 
-st.title("GBD 可视化助手 · 内测版")
-st.markdown("作者：zhangnan")
+st.title("GBD 可视化助手 · \xb7 内测版")
+st.markdown("u4f5cu者uff1azhangnan")
 
 tabs = st.tabs(["分组趋势图", "Table 1 生成器"])
 
+# ---- 分组趋势图 Tab ----
 with tabs[0]:
-    st.header("分组趋势图")
-    uploaded_file = st.file_uploader("上传 GBD CSV 数据文件", type=["csv"], key="chart")
+    st.header("u5206u7ec4u8d8bu52a8u56fe")
+    uploaded_file = st.file_uploader("u4e0au4f20 GBD CSV u6570u636eu6587u4ef6", type=["csv"], key="chart")
 
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
 
-        # 获取可选项
         measure_options = df['measure'].dropna().unique().tolist()
         location_options = df['location'].dropna().unique().tolist()
         sex_options = df['sex'].dropna().unique().tolist()
@@ -34,8 +34,7 @@ with tabs[0]:
         year_options = sorted(df['year'].dropna().unique().tolist())
 
         st.subheader("筛选条件")
-        chart_type = st.selectbox("选择图表类型", ["折线图"], index=0)
-
+        chart_type = st.selectbox("选择图表类型", ["u6298u7ebfu56fe"], index=0)
         group_by = st.selectbox("选择分组字段", ["sex", "age", "location", "cause"], index=0)
 
         selected_measure = st.selectbox("请选择 measure", ["请选择"] + measure_options)
@@ -45,7 +44,7 @@ with tabs[0]:
         selected_cause = st.selectbox("请选择 cause", ["请选择"] + cause_options)
         selected_years = st.slider("选择年份范围", min_value=min(year_options), max_value=max(year_options), value=(min(year_options), max(year_options)))
 
-        show_ci = st.checkbox("显示置信区间 (upper/lower)")
+        show_ci = st.checkbox("显u793a信区 (upper/lower)")
 
         if selected_measure != "请选择" and selected_location != "请选择" and selected_cause != "请选择":
             chart_df = df[(df['measure'] == selected_measure) &
@@ -64,7 +63,6 @@ with tabs[0]:
                     y=alt.Y('val:Q', title='Value'),
                     color=group_by + ":N"
                 )
-
                 lines = base.mark_line(point=True)
                 if show_ci:
                     band = base.mark_area(opacity=0.3).encode(
@@ -77,13 +75,15 @@ with tabs[0]:
 
                 st.altair_chart(chart, use_container_width=True)
 
-
+# ---- Table 1 Tab ----
 with tabs[1]:
     st.header("Table 1 生成器")
     table_file = st.file_uploader("上传 GBD CSV 文件用于生成 Table 1", type=["csv"], key="table")
 
     if table_file is not None:
         df = pd.read_csv(table_file)
+        order_df = pd.read_csv("/mnt/data/order.csv")
+        full_order = ["Global"] + order_df['Global'].tolist() + [loc for loc in df['location'].unique() if loc not in order_df['Global'].tolist() and loc != "Global"]
 
         st.subheader("选择生成参数")
         available_causes = df['cause'].dropna().unique().tolist()
@@ -104,12 +104,12 @@ with tabs[1]:
 
         def get_row(location):
             row = {"Feature": location}
+            age_for_number = "All ages" if selected_age == "Age-standardized" else selected_age
 
             for year in year_range:
                 d_number = df[(df['location'] == location) & (df['year'] == year) & (df['cause'] == selected_cause) &
                               (df['metric'] == 'Number') & (df['measure'] == selected_measure) &
-                              (df['age'] == ('All ages' if selected_age == 'Age-standardized' else selected_age)) &
-                              (df['sex'] == selected_sex)]
+                              (df['age'] == age_for_number) & (df['sex'] == selected_sex)]
 
                 d_rate = df[(df['location'] == location) & (df['year'] == year) & (df['cause'] == selected_cause) &
                             (df['metric'] == 'Rate') & (df['measure'] == selected_measure) &
@@ -118,15 +118,12 @@ with tabs[1]:
                 row[f"Cases_{year}"] = format_val(d_number['val'].sum(), d_number['lower'].sum(), d_number['upper'].sum(), 0) if not d_number.empty else "NA"
                 row[f"Rates_{year}"] = format_val(d_rate['val'].sum(), d_rate['lower'].sum(), d_rate['upper'].sum()) if not d_rate.empty else "NA"
 
-            # Cases change
             d_1990 = df[(df['location'] == location) & (df['year'] == 1990) & (df['cause'] == selected_cause) &
                         (df['metric'] == 'Number') & (df['measure'] == selected_measure) &
-                        (df['age'] == ('All ages' if selected_age == 'Age-standardized' else selected_age)) &
-                        (df['sex'] == selected_sex)]
+                        (df['age'] == age_for_number) & (df['sex'] == selected_sex)]
             d_2021 = df[(df['location'] == location) & (df['year'] == 2021) & (df['cause'] == selected_cause) &
                         (df['metric'] == 'Number') & (df['measure'] == selected_measure) &
-                        (df['age'] == ('All ages' if selected_age == 'Age-standardized' else selected_age)) &
-                        (df['sex'] == selected_sex)]
+                        (df['age'] == age_for_number) & (df['sex'] == selected_sex)]
             if not d_1990.empty and not d_2021.empty:
                 v1 = d_1990['val'].sum()
                 v2 = d_2021['val'].sum()
@@ -135,7 +132,6 @@ with tabs[1]:
             else:
                 row['Cases_change'] = "NA"
 
-            # EAPC
             d_rate_all = df[(df['location'] == location) & (df['cause'] == selected_cause) &
                             (df['metric'] == 'Rate') & (df['measure'] == selected_measure) &
                             (df['age'] == selected_age) & (df['sex'] == selected_sex)]
@@ -145,7 +141,7 @@ with tabs[1]:
                 try:
                     d_rate_all = d_rate_all[d_rate_all['val'] > 0]
                     d_rate_all['y'] = np.log(d_rate_all['val'])
-                    slope, intercept, r_value, p_value, std_err = stats.linregress(d_rate_all['year'], d_rate_all['y'])
+                    slope, _, _, _, std_err = stats.linregress(d_rate_all['year'], d_rate_all['y'])
                     eapc = (np.exp(slope) - 1) * 100
                     lci = (np.exp(slope - 1.96 * std_err) - 1) * 100
                     uci = (np.exp(slope + 1.96 * std_err) - 1) * 100
@@ -158,24 +154,23 @@ with tabs[1]:
 
         if st.button("生成 Table 1"):
             summary_df = []
-            all_locations = sorted(df['location'].dropna().unique().tolist())
-
-            for loc in all_locations:
-                summary_df.append(get_row(loc))
+            for loc in full_order:
+                if loc in available_locations:
+                    summary_df.append(get_row(loc))
 
             summary_table = pd.DataFrame(summary_df)
             st.dataframe(summary_table)
 
-            # 导出 Word
+            # ---- Word Export ----
             doc = Document()
-            doc.add_heading("Table 1", level=1)
+            doc.add_heading(f"Table 1 - {selected_cause}, {selected_age}, {selected_sex}", level=1)
 
             table = doc.add_table(rows=1, cols=len(summary_table.columns))
             hdr_cells = table.rows[0].cells
             for i, col in enumerate(summary_table.columns):
                 hdr_cells[i].text = str(col)
 
-            for index, row in summary_table.iterrows():
+            for _, row in summary_table.iterrows():
                 row_cells = table.add_row().cells
                 for i, item in enumerate(row):
                     row_cells[i].text = str(item)
