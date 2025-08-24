@@ -16,6 +16,16 @@ st.set_page_config(page_title="GBD 可视化助手", layout="wide")
 st.title("GBD 可视化助手 · 内测版")
 st.markdown("作者：zhangnan")
 
+# GBD 地理顺序配置
+def get_region_order(df):
+    sdi_regions = [
+        'High SDI', 'High-middle SDI', 'Middle SDI', 'Low-middle SDI', 'Low SDI'
+    ]
+    # 剔除 Global 和 SDI 后的 21 个地理区域
+    all_locations = df['location'].dropna().unique().tolist()
+    geo_regions = [loc for loc in all_locations if loc not in ['Global'] + sdi_regions]
+    geo_regions_sorted = sorted(geo_regions)  # 默认按字母排序
+    return ['Global'] + sdi_regions + geo_regions_sorted
 
 tabs = st.tabs(["分组趋势图", "Table 1 生成器"])
 
@@ -81,7 +91,6 @@ with tabs[0]:
 
                 st.altair_chart(chart, use_container_width=True)
 
-
 with tabs[1]:
     st.header("Table 1 生成器")
     table_file = st.file_uploader("上传 GBD CSV 文件用于生成 Table 1", type=["csv"], key="table")
@@ -99,7 +108,7 @@ with tabs[1]:
         selected_cause = st.selectbox("请选择病因 (cause)", available_causes)
         selected_age = st.selectbox("请选择年龄组 (age)", available_ages)
         selected_sex = st.selectbox("请选择性别 (sex)", available_sexes)
-        selected_measure = st.selectbox("请选择指标 (measure)", available_measures)
+        selected_measure = st.selectbox("请选择 measure", available_measures)
 
         year_range = [1990, 2021]
 
@@ -118,16 +127,10 @@ with tabs[1]:
                             (df['metric'] == 'Rate') & (df['measure'] == selected_measure) &
                             (df['age'] == selected_age) & (df['sex'] == selected_sex)]
 
-                if not d_number.empty:
-                    row[f"Cases_{year}"] = format_val(d_number['val'].sum(), d_number['lower'].sum(), d_number['upper'].sum(), 0)
-                else:
-                    row[f"Cases_{year}"] = "NA"
+                row[f"Cases_{year}"] = format_val(d_number['val'].sum(), d_number['lower'].sum(), d_number['upper'].sum(), 0) if not d_number.empty else "NA"
+                row[f"Rates_{year}"] = format_val(d_rate['val'].sum(), d_rate['lower'].sum(), d_rate['upper'].sum()) if not d_rate.empty else "NA"
 
-                if not d_rate.empty:
-                    row[f"Rates_{year}"] = format_val(d_rate['val'].sum(), d_rate['lower'].sum(), d_rate['upper'].sum())
-                else:
-                    row[f"Rates_{year}"] = "NA"
-
+            # change
             d_1990 = df[(df['location'] == location) & (df['year'] == 1990) & (df['cause'] == selected_cause) &
                         (df['metric'] == 'Number') & (df['measure'] == selected_measure) &
                         (df['age'] == selected_age) & (df['sex'] == selected_sex)]
@@ -152,7 +155,7 @@ with tabs[1]:
                 try:
                     d_rate_all = d_rate_all[d_rate_all['val'] > 0]
                     d_rate_all['y'] = np.log(d_rate_all['val'])
-                    slope, intercept, r_value, p_value, std_err = stats.linregress(d_rate_all['year'], d_rate_all['y'])
+                    slope, _, _, _, std_err = stats.linregress(d_rate_all['year'], d_rate_all['y'])
                     eapc = (np.exp(slope) - 1) * 100
                     lci = (np.exp(slope - 1.96 * std_err) - 1) * 100
                     uci = (np.exp(slope + 1.96 * std_err) - 1) * 100
@@ -160,28 +163,21 @@ with tabs[1]:
                 except:
                     pass
             row['EAPC_CI'] = eapc_ci
-
             return row
 
         if st.button("生成 Table 1"):
-            summary_df = []
-            all_locations = sorted(df['location'].dropna().unique().tolist())
-
-            for loc in all_locations:
-                summary_df.append(get_row(loc))
-
+            region_order = get_region_order(df)
+            summary_df = [get_row(loc) for loc in region_order if loc in df['location'].values]
             summary_table = pd.DataFrame(summary_df)
             st.dataframe(summary_table)
 
             doc = Document()
             doc.add_heading("Table 1", level=1)
-
             table = doc.add_table(rows=1, cols=len(summary_table.columns))
             hdr_cells = table.rows[0].cells
             for i, col in enumerate(summary_table.columns):
                 hdr_cells[i].text = str(col)
-
-            for index, row in summary_table.iterrows():
+            for _, row in summary_table.iterrows():
                 row_cells = table.add_row().cells
                 for i, item in enumerate(row):
                     row_cells[i].text = str(item)
