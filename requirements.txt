@@ -2,8 +2,6 @@ streamlit
 pandas
 numpy
 matplotlib
-scipy
-plotly
 altair
-openpyxl
 python-docx
+scipy
